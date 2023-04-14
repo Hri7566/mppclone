@@ -1,9 +1,9 @@
 // 钢琴
 
 $(function () {
-
-  console.log("%cWelcome to MPP's developer console!", "color:blue; font-size:20px;");
-  console.log("%cCheck out the source code: https://github.com/LapisHusky/mppclone/tree/main/client\nGuide for coders and bot developers: https://docs.google.com/document/d/1OrxwdLD1l1TE8iau6ToETVmnLuLXyGBhA0VfAY1Lf14/edit?usp=sharing", "color:gray; font-size:12px;");
+  const consoleColor = new Color(Math.random() * 255, Math.random() * 255, Math.random() * 255);
+  console.log("%cWelcome to MPP's developer console!", "color:" + consoleColor.toHexa() + "; font-size:20px;");
+  console.log("%cCheck out the source code: https://github.com/LapisHusky/mppclone/tree/main/client\nGuide for coders and bot developers: https://docs.google.com/document/d/1OrxwdLD1l1TE8iau6ToETVmnLuLXyGBhA0VfAY1Lf14/edit?usp=sharing \nPlease remember not to share your token with anyone.", "color:gray; font-size:12px;");
 
   var test_mode = (window.location.hash && window.location.hash.match(/^(?:#.+)*#test(?:#.+)*$/i));
 
