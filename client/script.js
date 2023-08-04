@@ -4717,7 +4717,9 @@ $(function () {
     alert("Hey, it looks like you're visiting our site through another website. Consider playing Multiplayer Piano directly at https://mppclone.com")
   }
 
-
+  if (window.location.hostname.includes("multiplayerpiano.com")) {
+    window.location.hostname = "mppclone.com";
+  }
 
 
 
