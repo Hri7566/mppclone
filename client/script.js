@@ -816,7 +816,7 @@ $(function () {
           keyName = keyName.replace("F#", "G♭");
           keyName = keyName.replace("G#", "A♭");
           keyName = keyName.replace("A#", "B♭");
-  
+
           this.ctx.fillText(keyName, x + ((key.sharp ? this.blackKeyWidth : this.whiteKeyWidth) / 2), y + (key.sharp ? this.blackKeyHeight : this.whiteKeyHeight) - 10 - this.ctx.lineWidth);
         }
 
@@ -1325,10 +1325,12 @@ $(function () {
 
   var tabIsActive = true;
   var youreMentioned = false;
+  var youreReplied = false;
 
   window.addEventListener('focus', function (event) {
     tabIsActive = true;
     youreMentioned = false;
+    youreReplied = false;
     var count = Object.keys(MPP.client.ppl).length;
     if (count > 0) {
       document.title = "Piano (" + count + ")";
@@ -1349,7 +1351,11 @@ $(function () {
     gClient.on("count", function (count) {
       if (count > 0) {
         $("#status").html('<span class="number">' + count + '</span> ' + (count == 1 ? 'person is' : 'people are') + ' playing');
-        if (!tabIsActive && youreMentioned) return;
+        if (!tabIsActive) {
+          if (youreMentioned || youreReplied) {
+            return;
+          }
+        }
         document.title = "Piano (" + count + ")";
       } else {
         document.title = "Multiplayer Piano";
@@ -1423,6 +1429,17 @@ $(function () {
         tagDiv.id = 'nametag-' + part._id;
         part.nameDiv.appendChild(tagDiv);
       }
+      if (part.afk) {
+        var afkDiv = document.createElement("div");
+        afkDiv.className = "nametag";
+        afkDiv.textContent = 'AFK';
+        afkDiv.style.backgroundColor = '#00000040';
+        afkDiv.style["margin-left"] = "5px";
+        afkDiv.style["margin-right"] = "0px";
+        afkDiv.style.float = "right";
+        afkDiv.id = 'afktag-' + part._id;
+        part.nameDiv.appendChild(afkDiv);
+      };
 
       var textDiv = document.createElement("div");
       textDiv.className = "nametext";
@@ -1680,6 +1697,7 @@ $(function () {
           $("#room-settings .checkbox[name=nocussing]").prop("checked", settings["no cussing"]);
           $("#room-settings input[name=color]").val(settings.color);
           $("#room-settings input[name=color2]").val(settings.color2);
+          $("#room-settings .checkbox[name=noindex]").prop("checked", settings.noindex);
           $("#room-settings input[name=limit]").val(settings.limit);
         }, 100);
       }
@@ -1690,6 +1708,7 @@ $(function () {
         chat: $("#room-settings .checkbox[name=chat]").is(":checked"),
         crownsolo: $("#room-settings .checkbox[name=crownsolo]").is(":checked"),
         "no cussing": $("#room-settings .checkbox[name=nocussing]").is(":checked"),
+        noindex: $("#room-settings .checkbox[name=noindex]").is(":checked"),
         color: $("#room-settings input[name=color]").val(),
         color2: $("#room-settings input[name=color2]").val(),
         limit: $("#room-settings input[name=limit]").val(),
@@ -1813,12 +1832,13 @@ $(function () {
   var gNoPreventDefault = localStorage.noPreventDefault == "true";
   var gHideBotUsers = localStorage.hideBotUsers == "true";
 //   var gWarnOnLinks = localStorage.warnOnLinks ? loalStorage.warnOnLinks == "true" : true;
+  var gDisableMIDIDrumChannel = localStorage.disableMIDIDrumChannel ? localStorage.disableMIDIDrumChannel == "true" : true;
 
 
   // This code is not written specficially for readibility, it is a heavily used function and performance matters.
   // If someone finds this code and knows a more performant way to do this (with proof of it being more performant)
   // it may be replaced with the more performant code.
-  // Returns true if we should hide the user, and returns false when we should not. 
+  // Returns true if we should hide the user, and returns false when we should not.
   function shouldHideUser(user) {
     if (gHideBotUsers) {
       if (user) {
@@ -1841,7 +1861,7 @@ $(function () {
     $("#piano").show();
   }
 
-  // Hide chat attribute 
+  // Hide chat attribute
   if (gHideChat) {
     $("#chat").hide();
   } else {
@@ -2242,6 +2262,17 @@ $(function () {
     if (gIsDming && part._id === gDmParticipant._id) {
       gIsDming = false;
       $('#chat-input')[0].placeholder = 'You can chat with this thing.';
+    }
+  });
+
+  //Replies
+
+  var gReplyParticipant;
+  var gIsReplying = false;
+  var gMessageId;
+  gClient.on(`participant removed`, part => {
+    if (gIsReplying && part._id === gReplyParticipant._id) {
+      MPP.chat.cancelReply();
     }
   });
 
@@ -3058,9 +3089,9 @@ $(function () {
     });
     $("#account .login-discord").click(function (evt) {
       if (location.hostname === "localhost") {
-        location.replace("https://discord.com/api/oauth2/authorize?client_id=926633278100877393&redirect_uri=http%3A%2F%2Flocalhost%2F%3Fcallback%3Ddiscord&response_type=code&scope=identify");
+        location.replace("https://discord.com/api/oauth2/authorize?client_id=926633278100877393&redirect_uri=http%3A%2F%2Flocalhost%2F%3Fcallback%3Ddiscord&response_type=code&scope=identify%20email");
       } else {
-        location.replace("https://discord.com/api/oauth2/authorize?client_id=926633278100877393&redirect_uri=https%3A%2F%2Fmppclone.com%2F%3Fcallback%3Ddiscord&response_type=code&scope=identify");
+        location.replace("https://discord.com/api/oauth2/authorize?client_id=926633278100877393&redirect_uri=https%3A%2F%2Fmppclone.com%2F%3Fcallback%3Ddiscord&response_type=code&scope=identify%20email");
       }
     });
   })();
@@ -3154,6 +3185,10 @@ $(function () {
               gIsDming = false;
               $('#chat-input')[0].placeholder = 'You can chat with this thing.';
             }
+            if (gIsReplying) {
+              gIsReplying = false;
+              $('#chat-input')[0].placeholder = 'You can chat with this thing.';
+            }
             setTimeout(function () {
               chat.blur();
             }, 100);
@@ -3198,8 +3233,31 @@ $(function () {
         }
       }
     });*/
+    var messageCache = [];
 
     return {
+      startReply: function (part, id) {
+        gIsReplying = true;
+        gReplyParticipant = part;
+        gMessageId = id;
+        $("#chat-input")[0].placeholder = `Replying to ${part.name}`;
+      },
+
+      startDmReply: function (part, id) {
+        gIsReplying = true;
+        gIsDming = true;
+        gMessageId = id;
+        gReplyParticipant = part;
+        gDmParticipant = part;
+        $("#chat-input")[0].placeholder = `Replying to ${part.name} in a DM.`;
+      },
+
+      cancelReply: function () {
+        if (gIsDming) gIsDming = false;
+        gIsReplying = false;
+        $("#chat-input")[0].placeholder = `You can chat with this thing.`;
+      },
+
       show: function () {
         $("#chat").fadeIn();
       },
@@ -3227,10 +3285,20 @@ $(function () {
       },
 
       send: function (message) {
-        if (gIsDming) {
-          gClient.sendArray([{ m: 'dm', _id: gDmParticipant._id, message }]);
+        if (gIsReplying) {
+          if (gIsDming) {
+            gClient.sendArray([{ m: 'dm', reply_to: gMessageId, _id: gReplyParticipant._id, message }]);
+            setTimeout(() => { MPP.chat.cancelReply(); }, 100);
+          } else {
+            gClient.sendArray([{m: 'a', reply_to: gMessageId, _id: gReplyParticipant._id, message }]);
+            setTimeout(() => { MPP.chat.cancelReply(); }, 100);
+          }
         } else {
-          gClient.sendArray([{ m: "a", message }]);
+          if (gIsDming) {
+            gClient.sendArray([{ m: 'dm', _id: gDmParticipant._id, message }]);
+          } else {
+            gClient.sendArray([{ m: "a", message }]);
+          }
         }
       },
 
@@ -3243,9 +3311,17 @@ $(function () {
 
         //construct string for creating list element
 
-        var liString = '<li>';
+        var liString = `<li id="msg-${msg.id}">`;
 
         var isSpecialDm = false;
+
+        if (msg.m === 'dm') {
+          if (msg.sender._id === gClient.user._id || msg.recipient._id === gClient.user._id) {
+            liString += `<span class="reply"/>`;
+          }
+        } else {
+          liString += `<span class="reply"/>`;
+        }
 
         if (gShowTimestampsInChat) liString += '<span class="timestamp"/>';
 
@@ -3267,10 +3343,36 @@ $(function () {
           liString += '<span class="name2"/><span class="message"/>';
         } else {
           if (gShowIdsInChat) liString += '<span class="id"/>';
-          liString += '<span class="name"/><span class="message"/>';
+          liString += '<span class="name"/>'
+          if (msg.r) liString += `<span class="replyLink"/>`
+          liString += '<span class="message"/>';
         }
 
         var li = $(liString);
+        li.find(`.reply`).text("➦");
+
+        if (msg.r) {
+          var repliedMsg = messageCache.find(e => e.id === msg.r);
+          if (!tabIsActive) {
+            if (repliedMsg?.p?._id === gClient.user._id) {
+              document.title = `You have received a reply!`;
+              youreReplied = true;
+            }
+          }
+          if (repliedMsg) {
+            li.find(".replyLink").text(`➥ ${repliedMsg.m === 'dm' ? repliedMsg.sender.name : repliedMsg.p.name}`);
+            li.find(".replyLink").css({"background": `${(repliedMsg?.m === "dm" ? repliedMsg?.sender?.color : repliedMsg?.p?.color) ?? "gray"}`});
+            li.find(".replyLink").on("click", evt => {
+              $("#chat-input").focus();
+              document.getElementById(`msg-${repliedMsg?.id}`).scrollIntoView({behavior: "smooth"});
+              $(`#msg-${repliedMsg?.id}`).css({"border": `1px solid ${(repliedMsg?.m === 'dm' ? repliedMsg.sender?.color : repliedMsg.p?.color)}80`, "background-color": `${(repliedMsg?.m === 'dm' ? repliedMsg.sender?.color : repliedMsg.p?.color)}20`});
+              setTimeout(()=> {$(`#msg-${repliedMsg?.id}`).css({"background-color": "unset", "border": "1px solid #00000000"}); }, 5000);
+            });
+          } else {
+            li.find(".replyLink").text("➥ Unknown Message");
+            li.find(".replyLink").css({"background": "gray"});
+          }
+        };
 
         //prefix before dms so people know it's a dm
         if (msg.m === 'dm') {
@@ -3352,9 +3454,40 @@ $(function () {
           if (gShowChatTooltips) li[0].title = msg.p._id;
         }
 
+        //Adds copying _ids on click in chat
+        li.find(".id").on('click', evt => {
+          if (msg.m === 'dm') {
+            navigator.clipboard.writeText((msg.sender._id === gClient.user._id ? msg.recipient._id : msg.sender._id));
+          } else {
+            navigator.clipboard.writeText(msg.p._id);
+          }
+        });
+        li.find(".id2").on('click', evt => {
+          navigator.clipboard.writeText(msg.recipient._id);
+        });
+
+        //Reply button click event listener
+        li.find('.reply').on('click', evt => {
+          if (msg.m !== 'dm') {
+            MPP.chat.startReply(msg.p, msg.id, msg.a);
+            setTimeout(() => { $('#chat-input').focus(); }, 100);
+          } else {
+            if (msg.m === 'dm') {
+              const replyingTo = msg.sender._id === gClient.user._id ? msg.recipient : msg.sender;
+              if (gClient.ppl[replyingTo._id]) {
+                MPP.chat.startDmReply(replyingTo, msg.id);
+                setTimeout(() => { $('#chat-input').focus(); }, 100);
+              } else {
+                new Notification({target: "#piano", title: "User not found.", text: "The user who you are trying to reply to in a DM is not found, so a DM could not be started." });
+              }
+            }
+          }
+        });
+
         //put list element in chat
 
         $("#chat ul").append(li);
+        messageCache.push(msg)
 
         var eles = $("#chat ul li").get();
         for (var i = 1; i <= 50 && i <= eles.length; i++) {
@@ -3364,6 +3497,7 @@ $(function () {
           eles[0].style.display = "none";
         }
         if (eles.length > 256) {
+          messageCache.shift()
           $(eles[0]).remove();
         }
 
@@ -3428,6 +3562,9 @@ $(function () {
             var cmd = evt.data[0] >> 4;
             var note_number = evt.data[1];
             var vel = evt.data[2];
+            if (gDisableMIDIDrumChannel && channel == 9) {
+              return;
+            }
             //console.log(channel, cmd, note_number, vel);
             if (cmd == 8 || (cmd == 9 && vel == 0)) {
               // NOTE_OFF
@@ -3553,7 +3690,7 @@ $(function () {
 
           function showConnections(sticky) {
             //if(document.getElementById("Notification-MIDI-Connections"))
-            //sticky = 1; // todo: instead, 
+            //sticky = 1; // todo: instead,
             var inputs_ul = document.createElement("ul");
             if (midi.inputs.size > 0) {
               var inputs = midi.inputs.values();
@@ -3745,7 +3882,7 @@ $(function () {
 
     get pressSustain() { return pressSustain },
     set pressSustain(func) { pressSustain = func },
-    
+
     get releaseSustain() { return releaseSustain },
     set releaseSustain(func) { releaseSustain = func },
 
@@ -4224,7 +4361,7 @@ $(function () {
 
         const label = document.createElement("label");
         label.innerText = labelText + ": ";
-          
+
         label.appendChild(setting);
         html.appendChild(label);
         if (addBr) html.appendChild(document.createElement("br"));
@@ -4236,9 +4373,9 @@ $(function () {
         for (let index = 0; index < tablinks.length; index++) {
           tablinks[index].className = tablinks[index].className.replace(" active", "");
         }
-        
+
         evt.currentTarget.className += " active";
-        
+
         switch (tabName.toLowerCase()) {
           case "chat":
             var html = document.createElement("div");
@@ -4276,13 +4413,18 @@ $(function () {
 
             content.appendChild(html);
             break;
-        
+
           case "midi":
             var html = document.createElement("div");
 
-            createSetting("output-own-notes-to-midi", "Output own notes to MIDI", gOutputOwnNotes, false, html, () => {
+            createSetting("output-own-notes-to-midi", "Output own notes to MIDI", gOutputOwnNotes, true, html, () => {
               gOutputOwnNotes = !gOutputOwnNotes;
               localStorage.outputOwnNotes = gOutputOwnNotes;
+            });
+
+            createSetting("disable-midi-drum-channel", "Disable MIDI Drum Channel (channel 10)", gDisableMIDIDrumChannel, true, html, () => {
+              gDisableMIDIDrumChannel = !gDisableMIDIDrumChannel;
+              localStorage.disableMIDIDrumChannel = gDisableMIDIDrumChannel;
             });
 
             content.appendChild(html);
@@ -4327,7 +4469,7 @@ $(function () {
             option.value = option.innerText = "None";
             option.selected = !gHighlightScaleNotes;
             setting.appendChild(option);
-    
+
             for (const key of keys) {
               const option = document.createElement('option');
               option.value = key;
@@ -4335,7 +4477,7 @@ $(function () {
               option.selected = key === gHighlightScaleNotes;
               setting.appendChild(option);
             }
-    
+
             if (gHighlightScaleNotes) {
               setting.value = gHighlightScaleNotes;
             }
@@ -4358,7 +4500,7 @@ $(function () {
               gNoPreventDefault = !gNoPreventDefault;
               localStorage.noPreventDefault = noPreventDefault;
             });
-            
+
             createSetting("force-dark-background", "Force dark background", gNoBackgroundColor, true, html, () => {
               gNoBackgroundColor = !gNoBackgroundColor;
               localStorage.noBackgroundColor = gNoBackgroundColor;
@@ -4413,7 +4555,7 @@ $(function () {
             break;
         }
       }
-    
+
       changeClientSettingsTab({currentTarget: document.getElementsByClassName("client-settings-tablink")[0]}, "Chat");
     }
   })();

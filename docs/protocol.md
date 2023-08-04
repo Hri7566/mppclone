@@ -77,7 +77,7 @@ All websocket close codes have a code (number) and a reason (string).
 - `4001` - `Too many unique users per IP per hour.`: Each IP address can only use 3 unique non-bot tokens per hour. This is to discourage people from using so-called "proxy tokens" which let them evade mutes or bans without actually using a proxy.
 - `4002` - `Exceeded x bytes per y seconds.`: There is a cap on how much data clients can send in a given period. This quota may change later, and the owner can manually increase it. Make sure you aren't sending extremely large messages.
 - `4003` - `Message buffer length exceeded x.`: Internally, the server buffers messages so that things always get done in the right order, even if a message runs asynchronous code. Clients can hit this limit if they send too many messages too quickly, or if the server has an error. Errors in the server are rare and shouldn't happen. The owner is able to see if one happened.
-- `4004` - `Timed out.`: Clients must send [t](#t-server-bound) messages every 20 seconds. They will get kicked if it has been longer than 30 seconds since the last time sync message was received. Time sync messages will not work before [hi](#hi-server-bound) has been sent.
+- `4004` - `Timed out.`: Clients must send [t](#t-server-bound) messages every 20 seconds. They will get kicked if it has been longer than 60 seconds since the last time sync message was received. Time sync messages will not work before [hi](#hi-server-bound) has been sent.
 - `4005` - `VPN detected.`: The connecting IP address was detected as a vpn/proxy/hosting service and has been disallowed. Use this form to appeal: https://forms.gle/mKRgvectoaQpPW4C6
 - `4007` - `Exceeded x messages per y seconds.`: There is a cap on how many individual message objects can be sent in a period of time. If this cap is exceeded the socket is closed.
 - `4008` - `Banned.`: The user is banned from the server. A notification should show a reason and amount of time remaining.
@@ -120,6 +120,7 @@ In some messages, the server will send a participant info object instead of an i
 - `"color"`: The user's color.
 - `"x"`: The user's mouse x coordinate (string or number). This is usually between 0-100 for standard clients, but can be any number if set with scripts. 0 is on the left edge, 100 is on the right edge. Default value is 200 until set by the user.
 - `"y"`: The user's mouse y coordinate (string or number). This is usually between 0-100 for standard clients, but can be any number if set with scripts. 0 is on the top edge, 100 is on the bottom edge. Default value is 100 until set by the user.
+- `"afk"`: Whether the user is AFK (boolean).
 - `?"tag"`: The user's [Tag](#tag) object.
 - `?"vanished"`: Whether the user is vanished (boolean). Regular users and bots will never see this property, however moderators will receive this if they or another user are vanished. If this property is not present, the user is not vanished.
 #### Example
@@ -134,7 +135,8 @@ In some messages, the server will send a participant info object instead of an i
     "color":"#a00"
   },
   "x":50,
-  "y":50
+  "y":50,
+  "afk": false
 }
 ```
 
@@ -187,6 +189,7 @@ Channel settings are an object with properties for each setting.
 - `?"color2"`: The channel's outer background color.
 - `"chat"`: Whether chat is enabled in this channel (boolean).
 - `"crownsolo"`: Whether anyone can play the piano (boolean). If this is false, only the crown holder can play the piano.
+- `"noindex"`: Whether bots are disallowed from automatically joining this room (e.g. to gather information about current users). **If this property is set to `true`, do not automatically join this room.**
 - `?"no cussing"`: Whether no cussing is enabled (boolean). If this is enabled, some things in chat will get replaced with asterisks for users who don't have the crown. If this property isn't present, "no cussing" is disabled.
 - `"limit"`: The maximum amount of users that can join this channel (number). This is an integer between 0-99. If this is lowered while more users are in the channel, users won't get kicked. The crown holder and users who already have a participant in the channel bypass this limit.
 - `?"minOnlineTime"`: The minimum amount of time that a user needs to have been online to join this channel (number). It's measured in milliseconds and is between 0 and 86400000. If this field is not present, the restriction does not apply. If a user holds the crown in this channel or if they already have a participant in the channel, they bypass this restriction.
@@ -199,6 +202,7 @@ Channel settings are an object with properties for each setting.
   "color":"#73b3cc",
   "color2":"#273546",
   "visible":true,
+  "noindex":false,
   "chat":true,
   "crownsolo":false
 }
@@ -311,11 +315,13 @@ Information about a user's account. This is displayed in clients so they can see
 "a" messages are sent to chat in the current channel.
 #### Properties
 - `"message"`: String to send in chat for everyone in your channel. Must be 512 characters or less and must follow [string validation](#string-validation).
+- `?"reply_to"`: ID of the message you're replying to. Omit if you're not replying to a message.
 #### Example
 ```json
 {
   "m":"a",
-  "message":"Hello :D"
+  "message":"Hello :D",
+  "reply_to":"9ad74fe6"
 }
 ```
 ### Bye (server-bound)
@@ -430,12 +436,14 @@ Browser clients send a list of connected midi inputs and outputs with this when 
 #### Properties
 - `"message"`: String to send in chat to the target user. Must be 512 characters or less and must follow [string validation](#string-validation).
 - `"_id"`: User id to send the message to (string).
+- `?"reply_to"`: ID of the message you're replying to. Omit if you're not replying to a message.
 #### Example
 ```json
 {
   "m":"dm",
   "message":"hi there",
-  "_id":"a8c86bb6e74c9ec8900e061a"
+  "_id":"a8c86bb6e74c9ec8900e061a",
+  "reply_to":"e20fcbe9"
 }
 ```
 
@@ -546,7 +554,7 @@ This is sent to subscribe to channel list updates.
 ```
 
 ### T (server-bound)
-"t" is for pinging. This must be sent every 20 seconds, because the server will disconnect your client if it's not sent for more than 30 seconds.
+"t" is for pinging. This must be sent every 20 seconds, because the server will disconnect your client if it's not sent for more than 60 seconds.
 #### Properties
 - `?"e"`: The client's time.
 #### Example
@@ -589,13 +597,16 @@ This is sent to subscribe to channel list updates.
 ### A (client-bound)
 "a" messages are sent to every client in a room when someone chats.
 #### Properties
+- `"id"`: A randomly-generated ID for the message. Used for message replies.
 - `"t"`: The server's time when it handled the chat message.
 - `"a"`: The text sent in chat.
 - `"p"`: Participant info of the user who sent the chat message.
+- `?"r"`: ID of a message this message is a reply to. Not present if the message is not a reply. It is not guaranteed that the message with this ID is actually present in the chat.
 #### Example
 ```json
 {
   "m":"a",
+  "id": "51d200f4",
   "t":1628015260531,
   "a":"test",
   "p":{
@@ -607,7 +618,8 @@ This is sent to subscribe to channel list updates.
       "color":"#a00"
     },
     "id":"514df042c61528f566530313"
-  }
+  },
+  "r": "35090d22"
 }
 ```
 
@@ -646,6 +658,7 @@ A "c" message is sent whenever a client joins a channel, or when chat is cleared
   "c": [
     {
       "m": "a",
+      "id": "d7fbcaec",
       "t": 1628017539781,
       "a": "Anonygold#9668: add stealwatches in k44 now",
       "p": {
@@ -661,6 +674,7 @@ A "c" message is sent whenever a client joins a channel, or when chat is cleared
     },
     {
       "m": "a",
+      "id": "2ddedee1",
       "t": 1628017546207,
       "a": "Retroplateau#1995: and deathwatches",
       "p": {
@@ -676,6 +690,7 @@ A "c" message is sent whenever a client joins a channel, or when chat is cleared
     },
     {
       "m": "a",
+      "id": "787d65d8",
       "t": 1628017551011,
       "a": "Retroplateau#1995: and annoywatches",
       "p": {
@@ -691,6 +706,7 @@ A "c" message is sent whenever a client joins a channel, or when chat is cleared
     },
     {
       "m": "a",
+      "id": "e2854db3",
       "t": 1628017555817,
       "a": "Anonygold#9668: add anonywatches",
       "p": {
@@ -702,7 +718,8 @@ A "c" message is sent whenever a client joins a channel, or when chat is cleared
           "color": "#55f"
         },
         "id": "141777bd0f408111c5fc7ad9"
-      }
+      },
+      "r": "787d65d8"
     }
   ]
 }
@@ -809,14 +826,17 @@ This is sent when a client sends a [custom](#custom-server-bound) message.
 ### Dm (client-bound)
 This is sent to the recipient when a client direct messages another participant.
 #### Properties
+- `"id"`: A randomly-generated ID for the message. Used for message replies.
 - `"t"`: The server's time when the DM was handled.
 - `"a"`: The message's text.
 - `"sender"`: [Participant info](#participant-info) for the user who sent the DM.
 - `"recipient"`: [Participant info](#participant-info) for the user who is receiving the DM. This will usually be a client's own participant, unless the user is a moderator and can see other user's DMs.
+- `?"r"`: ID of a message this message is a reply to. Not present if the message is not a reply. It is not guaranteed that the message with this ID is actually present in the chat.
 #### Example
 ```json
 {
   "m": "dm",
+  "id": "9fa65b3b",
   "t": 1628019628643,
   "a": "this direct message is going in the protocol documentation as an example",
   "sender": {
@@ -987,7 +1007,7 @@ Notification messages are sent when someone gets kickbanned from the channel you
 ```
 
 ### Nq
-This is sent when a client joins a channel or when their note quota changes. This message describes the note quota that the client should abide by. You can find the Note Quota script [here](https://github.com/aeiou879/mppclone/blob/main/client/NoteQuota.js).
+This is sent when a client joins a channel or when their note quota changes. This message describes the note quota that the client should abide by. You can find the Note Quota script [here](https://github.com/LapisHusky/mppclone/blob/main/client/NoteQuota.js).
 #### Properties
 - `"allowance"`: The amount of note on or offs that a participant can send per 2 seconds consistently.
 - `"max"`: The maximum amount of note on or offs that a participant can send per 6 seconds.
