@@ -945,7 +945,7 @@ $(function () {
   if (window.location.hostname === "localhost") {
     var soundDomain = `http://${location.host}`;
   } else {
-    var soundDomain = 'https://mppclone.com';
+    var soundDomain = 'https://mppclone.hri7566.info';
   }
 
   function SoundSelector(piano) {
